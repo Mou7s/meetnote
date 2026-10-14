@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net8.0</TargetFramework>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier><Nullable>enable</Nullable><ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.8" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <Compile Include="../LocalTranscriber.cs" Link="LocalTranscriber.cs" />
+    <Compile Include="../ModelLocator.cs" Link="ModelLocator.cs" />
+    <Compile Include="../DeepSeekAnalyzer.cs" Link="DeepSeekAnalyzer.cs" />
+  </ItemGroup>
+</Project>

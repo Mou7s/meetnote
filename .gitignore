@@ -1,0 +1,15 @@
+# .NET build output
+**/bin/
+**/obj/
+
+# IDE and user-specific files
+.vs/
+*.user
+*.suo
+
+# Local model/data files and secrets
+Models/
+*.onnx
+*.wav
+.env
+.env.*

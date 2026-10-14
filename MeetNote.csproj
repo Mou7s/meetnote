@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>MeetNote</AssemblyName>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="tests/**/*.cs" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.8.260921001" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="org.k2fsa.sherpa.onnx" Version="1.13.8" />
+  </ItemGroup>
+  <Target Name="CopyUnpackagedResources" AfterTargets="Build">
+    <Copy SourceFiles="$(TargetDir)$(AssemblyName).pri" DestinationFiles="$(TargetDir)resources.pri" Condition="Exists('$(TargetDir)$(AssemblyName).pri')" />
+  </Target>
+  <Target Name="PublishUnpackagedResources" AfterTargets="Publish">
+    <Copy SourceFiles="$(TargetDir)$(AssemblyName).pri" DestinationFiles="$(PublishDir)resources.pri" />
+  </Target>
+  <Target Name="PublishInstalledSpeechModel" AfterTargets="Publish">
+    <PropertyGroup><SpeechModelDirectory>$(LOCALAPPDATA)/MeetingCompanion/Models/sherpa-onnx-streaming-paraformer-bilingual-zh-en</SpeechModelDirectory></PropertyGroup>
+    <ItemGroup>
+      <SpeechModelFiles Include="$(SpeechModelDirectory)/encoder.int8.onnx;$(SpeechModelDirectory)/decoder.int8.onnx;$(SpeechModelDirectory)/tokens.txt" Condition="Exists('$(SpeechModelDirectory)/encoder.int8.onnx') And Exists('$(SpeechModelDirectory)/decoder.int8.onnx') And Exists('$(SpeechModelDirectory)/tokens.txt')" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SpeechModelFiles)" DestinationFolder="$(PublishDir)Models/sherpa-onnx-streaming-paraformer-bilingual-zh-en" SkipUnchangedFiles="true" />
+  </Target>
+  <!-- Windows App SDK also ships onnxruntime.dll. Sherpa requires its matching ABI. -->
+  <Target Name="CopySpeechRuntime" AfterTargets="Build">
+    <PropertyGroup><SpeechRuntime>$(NuGetPackageRoot)org.k2fsa.sherpa.onnx.runtime.win-x64/1.13.8/runtimes/win-x64/native/onnxruntime.dll</SpeechRuntime></PropertyGroup>
+    <Copy SourceFiles="$(SpeechRuntime)" DestinationFolder="$(TargetDir)" />
+  </Target>
+  <Target Name="PublishSpeechRuntime" AfterTargets="Publish">
+    <Copy SourceFiles="$(NuGetPackageRoot)org.k2fsa.sherpa.onnx.runtime.win-x64/1.13.8/runtimes/win-x64/native/onnxruntime.dll" DestinationFolder="$(PublishDir)" />
+  </Target>
+</Project>
