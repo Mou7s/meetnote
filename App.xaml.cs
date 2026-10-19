@@ -16,8 +16,82 @@ public partial class App : Application
     }
     protected override async void OnLaunched(LaunchActivatedEventArgs args)
     {
+        if (Environment.GetCommandLineArgs().Contains("--check-cloud-service"))
+        {
+            var report = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MeetingCompanion", "qwen-service-check.txt");
+            try
+            {
+                var settings = AssistantSettings.Load();
+                var key = AssistantSettings.ReadKey("MeetNote.Aliyun");
+                await CloudTranscriber.CheckConnectionAsync(key, settings.CloudModel, settings.CloudHost, settings.RecognitionContext, settings.RecognitionTerms);
+                File.WriteAllText(report, "PASS model task-started: " + settings.CloudModel + ". No meeting audio uploaded.");
+                var commandArgs = Environment.GetCommandLineArgs();
+                var index = Array.IndexOf(commandArgs, "--check-cloud-service");
+                if (index + 1 < commandArgs.Length)
+                {
+                    var text = new System.Text.StringBuilder();
+                    Exception? failure = null;
+                    var transcriber = new CloudTranscriber(key, settings.CloudModel, settings.CloudHost, settings.RecognitionContext, settings.RecognitionTerms);
+                    transcriber.Final += segment => text.AppendLine(segment.Text);
+                    transcriber.Failed += error => failure = error;
+                    using var wav = new NAudio.Wave.WaveFileReader(commandArgs[index + 1]);
+                    if (wav.WaveFormat.SampleRate != 16000 || wav.WaveFormat.BitsPerSample != 16 || wav.WaveFormat.Channels != 1) throw new IOException("Expected public test PCM16 mono 16kHz WAV.");
+                    var buffer = new byte[3200];
+                    int count;
+                    while ((count = wav.Read(buffer, 0, buffer.Length)) > 0) transcriber.Push(buffer.AsSpan(0, count).ToArray());
+                    await transcriber.CompleteAsync();
+                    if (failure != null) throw failure;
+                    if (text.Length == 0) throw new IOException("No final transcript returned for public test sample.");
+                    File.AppendAllText(report, "\nPASS public sample streaming + final result: " + text);
+                }
+            }
+            catch (Exception error) { File.AppendAllText(report, "\nFAIL " + error.Message); }
+            finally { Exit(); }
+            return;
+        }
+        if (Environment.GetCommandLineArgs().Contains("--configure-cloud"))
+        {
+            var report = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MeetingCompanion", "cloud-connection-check.txt");
+            try
+            {
+                using var input = System.Text.Json.JsonDocument.Parse(await Console.In.ReadToEndAsync());
+                var key = input.RootElement.GetProperty("key").GetString() ?? "";
+                var host = input.RootElement.GetProperty("host").GetString() ?? "";
+                var settings = AssistantSettings.Load();
+                settings.CloudHost = host; settings.TranscriptionEngine = "aliyun";
+                AssistantSettings.SaveKey(key, "MeetNote.Aliyun"); settings.Save();
+                await CloudTranscriber.CheckConnectionAsync(key, settings.CloudModel, host);
+                File.WriteAllText(report, "PASS credential saved in Windows vault; cloud task-started received. No audio uploaded.");
+            }
+            catch (Exception error) { File.WriteAllText(report, "FAIL " + error.Message); }
+            finally { Exit(); }
+            return;
+        }
         try { window = new MainWindow(); window.Activate(); }
         catch (Exception error) { Log(error); throw; }
+        if (Environment.GetCommandLineArgs().Contains("--check-cloud-ui"))
+        {
+            var report = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MeetingCompanion", "cloud-ui-check.txt");
+            File.WriteAllText(report, "PASS published WinUI window and cloud settings loaded. No API calls or recorded audio tested.");
+            window.Close();
+            return;
+        }
+        if (Environment.GetCommandLineArgs().Contains("--check-whisper"))
+        {
+            var report = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MeetingCompanion", "whisper-startup-check.txt");
+            try
+            {
+                var transcriber = await WhisperTranscriber.CreateAsync(AssistantSettings.Load().WhisperModelFolder);
+                Exception? failure = null;
+                transcriber.Failed += error => failure = error;
+                await transcriber.CompleteAsync();
+                if (failure != null) throw failure;
+                File.WriteAllText(report, "PASS published WinUI process: Whisper model loaded and worker closed. No recorded audio tested.");
+            }
+            catch (Exception error) { File.WriteAllText(report, "FAIL\n" + error); }
+            finally { window?.Close(); }
+            return;
+        }
         if (Environment.GetCommandLineArgs().Contains("--check-transcriber"))
         {
             var report = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "MeetingCompanion", "transcriber-check.txt");

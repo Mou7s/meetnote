@@ -13,33 +13,58 @@
           <TextBox x:Name="MeetingTitle" Header="会议主题" Text="新会议" MaxLength="120" />
           <ComboBox Grid.Column="1" x:Name="Microphones" Header="麦克风" HorizontalAlignment="Stretch" />
         </Grid>
-        <InfoBar x:Name="Notice" IsOpen="True" IsClosable="False" Severity="Informational" Title="实时会议助手" Message="本地实时转写；在设置中配置 DeepSeek 后可分析转写文字。" />
+        <InfoBar x:Name="Notice" IsOpen="True" IsClosable="False" Severity="Informational" Title="实时会议助手" Message="在设置中配置百炼 API Key 后使用在线转写；DeepSeek 可分析转写文字。" />
       </StackPanel>
       <Grid Grid.Row="1" x:Name="Workspace" ColumnSpacing="16">
         <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Border Padding="20" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
           <Grid RowSpacing="12">
             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-            <StackPanel Spacing="6"><TextBlock Text="录音内容" Style="{ThemeResource SubtitleTextBlockStyle}"/><TextBlock x:Name="RecordingStatus" Text="准备就绪"/><StackPanel Orientation="Horizontal" Spacing="12"><TextBlock x:Name="Elapsed" Text="00:00:00"/><ProgressBar x:Name="Level" Width="160" Maximum="100" Value="0"/></StackPanel></StackPanel>
+            <StackPanel Spacing="6"><TextBlock Text="录音内容" Style="{ThemeResource SubtitleTextBlockStyle}"/><TextBlock x:Name="RecordingStatus" Text="准备就绪"/><StackPanel Orientation="Horizontal" Spacing="12"><TextBlock x:Name="Elapsed" Text="00:00:00"/><TextBlock x:Name="AudioStatus" Text="等待录音" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/></StackPanel>
+              <TextBlock x:Name="TransferStatus" Text="" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontSize="12"/>
+              <Border Background="{ThemeResource ControlFillColorDefaultBrush}" CornerRadius="6" Padding="8" AutomationProperties.Name="麦克风实时输入波形">
+                <Grid x:Name="WaveformHost" Height="64" SizeChanged="OnWaveformSizeChanged">
+                  <Border Height="1" VerticalAlignment="Center" Background="{ThemeResource CardStrokeColorDefaultBrush}"/>
+                  <Polyline x:Name="Waveform" Stroke="{ThemeResource AccentFillColorDefaultBrush}" StrokeThickness="2" StrokeLineJoin="Round"/>
+                </Grid>
+              </Border>
+            </StackPanel>
             <ScrollViewer Grid.Row="1" x:Name="TranscriptScroll"><TextBlock x:Name="TranscriptText" Text="开始录音后，转写文字会出现在这里。" TextWrapping="Wrap" IsTextSelectionEnabled="True" FontSize="16"/></ScrollViewer>
             <TextBlock Grid.Row="2" x:Name="PartialText" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
             <StackPanel Grid.Row="3" Spacing="4"><TextBlock x:Name="FileLocation" Text="音频保存在本地" TextWrapping="Wrap" FontSize="12" IsTextSelectionEnabled="True"/><ListView x:Name="Markers" MaxHeight="64"/></StackPanel>
           </Grid>
         </Border>
         <Border Grid.Column="1" Padding="20" CornerRadius="8" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1">
-          <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="AI 分析 · DeepSeek" Style="{ThemeResource SubtitleTextBlockStyle}"/><StackPanel Grid.Row="1" Spacing="6"><TextBlock x:Name="AnalysisStatus" Text="等待会议内容" TextWrapping="Wrap"/><Button x:Name="AnalyzeButton" Content="立即分析" Click="OnAnalyze" IsEnabled="False"/></StackPanel><ScrollViewer Grid.Row="2"><TextBlock x:Name="AnalysisText" Text="要点、决定和待办会在这里持续更新。" TextWrapping="Wrap" IsTextSelectionEnabled="True" FontSize="16"/></ScrollViewer></Grid>
+          <Grid RowSpacing="12"><Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions><TextBlock Text="AI 分析 · DeepSeek" Style="{ThemeResource SubtitleTextBlockStyle}"/><StackPanel Grid.Row="1" Spacing="6"><TextBlock x:Name="AnalysisStatus" Text="等待会议内容" TextWrapping="Wrap"/><ToggleSwitch x:Name="LiveAnalyze" Header="实时 AI 分析" OnContent="自动更新" OffContent="手动更新" Toggled="OnLiveAnalyzeChanged"/><StackPanel Orientation="Horizontal" Spacing="8"><Button x:Name="AnalyzeButton" Content="立即分析" Click="OnAnalyze" IsEnabled="False"/><Button Content="查看最新" Click="OnLatestAnalysis"/></StackPanel><CheckBox x:Name="FollowLatest" Content="锁定最新" IsChecked="True" Checked="OnFollowLatestChecked"/></StackPanel><ScrollViewer Grid.Row="2" x:Name="AnalysisScroll"><StackPanel Spacing="16" SizeChanged="OnAnalysisContentSizeChanged"><StackPanel x:Name="AnalysisHistory" Spacing="16"/><TextBlock x:Name="AnalysisDraftHeading" Text="" FontWeight="SemiBold"/><TextBlock x:Name="AnalysisText" Text="分析会按时间段追加，之前的内容会保留。" TextWrapping="Wrap" IsTextSelectionEnabled="True" FontSize="16"/></StackPanel></ScrollViewer></Grid>
         </Border>
       </Grid>
       <ListView Grid.Row="1" x:Name="History" Visibility="Collapsed" SelectionChanged="OnHistorySelected" />
       <ScrollViewer Grid.Row="1" x:Name="Settings" Visibility="Collapsed"><StackPanel Spacing="12">
-        <TextBlock Text="本地转写" Style="{ThemeResource SubtitleTextBlockStyle}"/>
-        <TextBox x:Name="ModelFolder" Header="模型目录"/>
-        <TextBlock Text="使用中英流式 Paraformer 模型，音频在本机识别。" TextWrapping="Wrap"/>
+        <TextBlock Text="语音转写" Style="{ThemeResource SubtitleTextBlockStyle}"/>
+        <ComboBox x:Name="TranscriptionEngine" Header="转写方式" HorizontalAlignment="Stretch">
+          <ComboBoxItem Content="在线转写 · 阿里云百炼"/>
+          <ComboBoxItem Content="Whisper large-v3-turbo（大模型，停顿后出字）"/>
+          <ComboBoxItem Content="Paraformer（轻量流式模型）"/>
+        </ComboBox>
+        <PasswordBox x:Name="CloudApiKey" Header="百炼 API Key（北京地域，保存在 Windows 凭据管理器）"/>
+        <TextBox x:Name="CloudHost" Header="百炼 API Host（创建密钥时页面提供的地址）"/>
+        <ComboBox x:Name="CloudModel" Header="在线识别模型" HorizontalAlignment="Stretch">
+          <ComboBoxItem Content="Paraformer 实时版"/>
+          <ComboBoxItem Content="Fun-ASR 实时版"/>
+          <ComboBoxItem Content="Qwen-Audio 3.1 实时会议转写（推荐）"/>
+        </ComboBox>
+        <TextBlock Text="在线模式会将麦克风音频发送至阿里云识别，原始录音仍保存在本地。免费额度用尽后按量计费，额度请在百炼控制台确认。暂停时不采集、不上传。" TextWrapping="Wrap"/>
+        <TextBox x:Name="RecognitionContext" Header="会议背景（Qwen 3.1，最多400字）" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="400" MinHeight="72"/>
+        <TextBox x:Name="RecognitionTerms" Header="专业词、人名、厂家、型号（Qwen 3.1，每行一个，最多50个）" AcceptsReturn="True" TextWrapping="Wrap" MaxLength="4000" MinHeight="100" PlaceholderText="请填写确认过的准确写法，保留型号的字母和数字"/>
+        <TextBlock Text="背景和专业词将在下一次开始录音时发送给识别服务，帮助减少专业词误识别；不会直接替换已生成的文字。" TextWrapping="Wrap"/>
+        <TextBox x:Name="WhisperModelFolder" Header="Whisper 大模型目录"/>
+        <TextBox x:Name="ModelFolder" Header="Paraformer 轻量模型目录"/>
+        <TextBlock Text="Whisper 在停顿后分段识别，连续发言时约每 15 秒处理一段。本地模式需先加载模型。" TextWrapping="Wrap"/>
         <TextBlock Text="DeepSeek" Style="{ThemeResource SubtitleTextBlockStyle}"/>
         <PasswordBox x:Name="ApiKey" Header="API 密钥（保存在 Windows 凭据管理器）"/>
         <TextBox x:Name="AiModel" Header="模型名称" Text="deepseek-flash"/>
-        <ToggleSwitch x:Name="AutoAnalyze" Header="每 20 秒自动分析新增内容" OnContent="已开启" OffContent="已关闭"/>
-        <TextBlock Text="开启自动分析或点击立即分析，会将转写文字发送给 DeepSeek，产生 API 费用。音频不会上传。设置在下一场会议生效。" TextWrapping="Wrap"/>
+        <ToggleSwitch x:Name="AutoAnalyze" Header="持续自动分析新增内容（最快每 5 秒一轮）" OnContent="已开启" OffContent="已关闭"/>
+        <TextBlock Text="开启自动分析或点击立即分析，会将转写文字发送给 DeepSeek，产生 API 费用。DeepSeek 分析只接收转写文字；在线语音转写另行上传音频。设置在下一场会议生效。" TextWrapping="Wrap"/>
         <Button x:Name="SaveSettingsButton" Content="保存设置" Click="OnSaveSettings"/>
         <TextBlock Text="数据存储" Style="{ThemeResource SubtitleTextBlockStyle}"/><TextBlock x:Name="StorageLocation" TextWrapping="Wrap" IsTextSelectionEnabled="True"/>
       </StackPanel></ScrollViewer>

@@ -5,7 +5,7 @@ namespace MeetingCompanion;
 public record TranscriptSegment(double StartSeconds, string Text);
 
 // All native recognizer operations run on a single worker, never on the audio callback.
-public sealed class LocalTranscriber
+public sealed class LocalTranscriber : ILocalTranscriber
 {
     private readonly Channel<byte[]> audio = Channel.CreateBounded<byte[]>(new BoundedChannelOptions(600) { SingleReader = true, SingleWriter = true, FullMode = BoundedChannelFullMode.Wait });
     private readonly OnlineRecognizer recognizer;
