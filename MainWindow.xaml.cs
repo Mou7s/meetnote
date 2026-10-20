@@ -148,7 +148,7 @@ public partial class MainWindow : Window
         PauseButton.IsEnabled = MarkButton.IsEnabled = StopButton.IsEnabled = active && !stopping;
         Microphones.IsEnabled = MeetingTitle.IsEnabled = !active && !stopping && !starting && !analyzing;
         SaveSettingsButton.IsEnabled = !active && !stopping && !starting && !analyzing;
-        AnalyzeButton.IsEnabled = transcript.Count > 0 && !analyzing && !stopping && !starting && !string.IsNullOrWhiteSpace(apiKey);
+        ResummarizeButton.IsEnabled = AnalyzeButton.IsEnabled = transcript.Count > 0 && !analyzing && !stopping && !starting && !string.IsNullOrWhiteSpace(apiKey);
         PauseButton.Content = recorder.IsPaused ? "继续" : "暂停";
         var modelName = settings.TranscriptionEngine == "aliyun" ? $"在线转写 · {settings.CloudModel}" : settings.TranscriptionEngine == "paraformer" ? "Paraformer" : "Whisper large-v3-turbo";
         RecordingStatus.Text = active ? recorder.IsPaused ? "录音已暂停" : transcriberLoading ? "正在录音 · 模型加载中 · 本地保存" : $"正在录音 · {modelName} · 本地保存" : $"准备就绪 · {modelName}";
@@ -289,7 +289,12 @@ public partial class MainWindow : Window
     }
     private static string FormatSegment(TranscriptSegment segment) => $"[{TimeSpan.FromSeconds(segment.StartSeconds):hh\\:mm\\:ss}] {segment.Text}";
     private async void OnAnalyze(object sender, RoutedEventArgs e) { analysisTask = AnalyzeAsync(false, true); await analysisTask; }
-    private async Task AnalyzeAsync(bool final, bool manual = false)
+    private async void OnResummarize(object sender, RoutedEventArgs e)
+    {
+        analysisTask = AnalyzeAsync(true, true, true);
+        await analysisTask;
+    }
+    private async Task AnalyzeAsync(bool final, bool manual = false, bool replace = false)
     {
         if (analyzing || transcript.Count == 0 || string.IsNullOrWhiteSpace(apiKey)) return;
         if (!final && transcript.Count <= analyzedCount)
@@ -297,7 +302,7 @@ public partial class MainWindow : Window
             if (manual) AnalysisStatus.Text = "暂无新增转写，前面的分析已保留。";
             return;
         }
-        analyzing = true; UpdateButtons(); AnalysisStatus.Text = final ? "正在生成最终总结…" : "正在分析…";
+        analyzing = true; UpdateButtons(); AnalysisStatus.Text = replace ? "正在根据全部转写重新总结…" : final ? "正在生成最终总结…" : "正在分析…";
         try
         {
             var count = transcript.Count;
@@ -305,19 +310,24 @@ public partial class MainWindow : Window
             var pending = final ? transcript.ToList() : transcript.Skip(analyzedCount).ToList();
             var startSeconds = pending[0].StartSeconds;
             var endSeconds = pending[^1].StartSeconds;
-            var heading = final ? "会议最终总结" : $"新增分析 · {TimeSpan.FromSeconds(startSeconds):hh\\:mm\\:ss} — {TimeSpan.FromSeconds(endSeconds):hh\\:mm\\:ss}";
+            var heading = replace ? "会议重新总结" : final ? "会议最终总结" : $"新增分析 · {TimeSpan.FromSeconds(startSeconds):hh\\:mm\\:ss} — {TimeSpan.FromSeconds(endSeconds):hh\\:mm\\:ss}";
             AnalysisDraftHeading.Text = heading + "（生成中）";
             AnalysisText.Text = "";
-            var context = analysis.Length <= 24000 ? analysis : analysis[^24000..];
+            var context = replace ? "" : analysis.Length <= 24000 ? analysis : analysis[^24000..];
             var input = string.Join("\n", pending.Select(FormatSegment));
             if (input.Length > 60000) throw new InvalidOperationException("待分析内容过长，请及时分析或拆分会议；已有录音和转写仍保存在本地。");
             var generated = await analyzer.AnalyzeAsync(apiKey, settings.DeepSeekModel, MeetingTitle.Text, context, input, final, lifetime.Token, text =>
             {
                 AnalysisText.Text = text;
                 QueueAnalysisScroll();
-                AnalysisStatus.Text = final ? "正在生成最终总结…" : "实时更新中…";
+                AnalysisStatus.Text = replace ? "重新总结生成中…" : final ? "正在生成最终总结…" : "实时更新中…";
             });
             var entry = new AnalysisUpdate(DateTime.Now, startSeconds, endSeconds, final, generated);
+            if (replace)
+            {
+                analysisUpdates.Clear();
+                AnalysisHistory.Children.Clear();
+            }
             analysisUpdates.Add(entry);
             var block = new StackPanel { Spacing = 6 };
             block.Children.Add(new TextBlock { Text = heading, FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, TextWrapping = TextWrapping.Wrap });
@@ -327,7 +337,7 @@ public partial class MainWindow : Window
             analyzedCount = count;
             AnalysisText.Text = ""; AnalysisDraftHeading.Text = "";
             QueueAnalysisScroll();
-            AnalysisStatus.Text = final ? "最终总结已完成" : $"已更新 · {DateTime.Now:HH:mm:ss}";
+            AnalysisStatus.Text = replace ? "重新总结已完成" : final ? "最终总结已完成" : $"已更新 · {DateTime.Now:HH:mm:ss}";
             SaveMetadata();
         }
         catch (Exception ex) { AnalysisText.Text = "本次分析未完成，可重试；之前的分析已保留。"; AnalysisDraftHeading.Text = ""; AnalysisStatus.Text = "分析失败，可点击立即分析重试"; ShowNotice("AI 分析失败", ex.Message, InfoBarSeverity.Error); }
