@@ -1,10 +1,40 @@
 # MeetNote · 实时会议助手
 
-> Web 版已在 [`web/`](web/README.md) 实现并部署：Nuxt + Bun + Nuxt UI，Cloudflare Workers，免登录、用户自行填写 API Key。迁移进度见 [WEB-MIGRATION.md](WEB-MIGRATION.md)。以下仍为现有 Windows 桌面版说明。
+录音、实时转写与 AI 会议整理：左侧查看录音内容，右侧查看分析结果。仓库包含 Web 版与 Windows 桌面版，两者独立运行。
 
-原生 WinUI 3 Windows 会议助手：左侧实时录音与转写，右侧由 DeepSeek 持续分析。支持在线识别、本地识别、分析历史和重点标记。
+## Web 版
 
-## 当前功能
+**[打开 MeetNote Web](https://meetnote.mou7s.workers.dev/)**，无需注册或登录。首次填写自己的百炼与 DeepSeek API Key，也可跳过密钥仅录音。
+
+- 支持麦克风选择、音量显示、暂停/恢复、在线转写和重点标记。
+- 点击“立即分析”，流式总结截至点击时的全部确认转写；录音中可使用，当前不自动分析。
+- 支持会议历史、录音回放与下载、JSON 导出。
+- 每个浏览器使用独立工作空间，密钥在服务端加密保存。换浏览器、清除 Cookie 或标识过期后无法找回原空间，当前没有跨设备同步。
+- 在线转写将音频发送至百炼，AI 分析将转写文本发送至 DeepSeek，费用计入用户填写的服务商账号。
+
+技术栈为 Nuxt 4、Nuxt UI 4、TypeScript 与 Bun，运行于 Cloudflare Workers，使用 D1、R2 与 Durable Objects。
+
+开发入口：
+
+```powershell
+cd web
+bun install --frozen-lockfile
+Copy-Item .dev.vars.example .dev.vars
+# 按 web/README.md 配置本地加密主密钥后继续。
+bun run build
+bun run db:migrate
+bun run dev
+```
+
+访问本地地址 `http://127.0.0.1:3468`。详细配置、部署与限制见 [Web 版说明](web/README.md)，迁移记录见 [WEB-MIGRATION.md](WEB-MIGRATION.md)。
+
+Web 版单场录音最多两小时，需保持页面打开；尚无全文检索、共享、删除、桌面历史导入、本地识别或说话人区分。真实麦克风、云端模型效果和长时间录音仍待完整验证。
+
+## Windows 桌面版
+
+原生 WinUI 3 + .NET 8 应用，源码位于仓库根目录。支持在线识别、本地 Whisper / sherpa-onnx 识别、自动 AI 分析、分析历史和重点标记。以下为桌面版使用与开发说明；其设置、数据存储和自动分析行为独立于 Web 版。
+
+### 当前功能
 
 - 麦克风选择、真实输入音量波形、录音计时、暂停/恢复、结束保存和退出确认。
 - 默认在线模型 `qwen-audio-3.1-asr-flash-streaming`，使用远场会议 VAD；可切换 `fun-asr-realtime` 或 `paraformer-realtime-v2`。
@@ -19,7 +49,7 @@
 
 尚未实现：说话人区分、应用内历史回放与全文检索、托盘及快捷键。
 
-## 在线转写设置
+### 在线转写设置
 
 1. 在[百炼 API Key 页面](https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key)创建华北2（北京）地域的密钥。这里指服务地域，用户不需要位于北京。
 2. 在 MeetNote 设置中选择“在线转写 · 阿里云百炼”，填写百炼 API Key。
@@ -31,7 +61,7 @@
 
 接口说明：[Qwen Streaming 客户端事件](https://help.aliyun.com/zh/model-studio/qwen-audio-asr-streaming-client-events)、[服务端事件](https://help.aliyun.com/zh/model-studio/qwen-audio-asr-streaming-server-events)。
 
-## AI 分析
+### AI 分析
 
 设置中填写 **DeepSeek 独立的 API Key**，默认模型代号为 `deepseek-flash`，调用 DeepSeek 官方接口。百炼充值余额不能用于 DeepSeek。
 
@@ -41,9 +71,9 @@ DeepSeek 接收会议主题、已有分析背景和确认转写文本，不接�
 
 分析是对转写文字的辅助整理。人名、术语、数字、负责人和日期都应结合原始录音确认，不能把公开样本通过当作现场准确率保证。
 
-## 本地识别（可选）
+### 本地识别（可选）
 
-### Whisper large-v3-turbo
+#### Whisper large-v3-turbo
 
 安装 [uv](https://docs.astral.sh/uv/)，然后运行：
 
@@ -57,7 +87,7 @@ Whisper 通过独立后台进程运行，CPU int8 推理，在停顿后分段出
 
 Python 环境和 Whisper 模型不包含在原生发布目录中，换电脑后需要重新安装。
 
-### Paraformer
+#### Paraformer
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/Install-Model.ps1
@@ -67,7 +97,7 @@ powershell -ExecutionPolicy Bypass -File scripts/Install-Model.ps1
 
 本地转写不需要云端识别密钥；如开启 DeepSeek 分析，转写文字仍会发送至 DeepSeek。
 
-## 数据存储
+### 数据存储
 
 每场会议保存在 `%LOCALAPPDATA%\MeetingCompanion\Meetings` 的独立目录：
 
@@ -76,7 +106,7 @@ powershell -ExecutionPolicy Bypass -File scripts/Install-Model.ps1
 
 暂停时间不计入录音文件时长。转写时间戳为录音时间轴上的近似位置。分析历史从新版开始保存，旧版本已覆盖的摘要不会自动恢复；原始转写仍在会议文件中。
 
-## 开发与检查
+### 开发与检查
 
 需要 Windows 10 1809 或更高版本、.NET 8 SDK，目标为 Windows x64。
 
@@ -108,7 +138,7 @@ dotnet run --project tests/MeetNote.Checks.csproj -c Release
 
 检查报告写入当前用户的 `MeetingCompanion` 本地数据目录。`--configure-cloud` 是凭据配置辅助入口，从标准输入接收配置、保存凭据并检查连接；不要将密钥写入命令行、脚本或仓库。验证结果与限制见 [VALIDATION.md](VALIDATION.md)。
 
-## 发布
+### 发布
 
 ```powershell
 dotnet publish MeetNote.csproj -c Release -r win-x64 --self-contained true -o ../meetnote-windows
@@ -118,7 +148,7 @@ dotnet publish MeetNote.csproj -c Release -r win-x64 --self-contained true -o ..
 
 Windows App SDK 与 sherpa-onnx 都提供 `onnxruntime.dll`。项目明确复制 sherpa 配套的 1.28.2 运行库，避免 ABI 冲突。升级 sherpa 时需同步修改复制路径，并重新检查实际发布进程。Whisper 的 Python/ONNX 依赖运行在独立进程中。
 
-## 源码结构
+### 源码结构
 
 | 文件 | 职责 |
 |---|---|
