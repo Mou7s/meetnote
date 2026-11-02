@@ -1,5 +1,7 @@
 # MeetNote · 实时会议助手
 
+> Web 版已在 [`web/`](web/README.md) 实现并部署：Nuxt + Bun + Nuxt UI，Cloudflare Workers，免登录、用户自行填写 API Key。迁移进度见 [WEB-MIGRATION.md](WEB-MIGRATION.md)。以下仍为现有 Windows 桌面版说明。
+
 原生 WinUI 3 Windows 会议助手：左侧实时录音与转写，右侧由 DeepSeek 持续分析。支持在线识别、本地识别、分析历史和重点标记。
 
 ## 当前功能

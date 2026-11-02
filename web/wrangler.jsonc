@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "meetnote",
+  "main": "worker/index.ts",
+  "workers_dev": true,
+  "compatibility_date": "2026-10-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "routes": [{ "pattern": "meetnote.mou7s.com", "custom_domain": true }],
+  "assets": {
+    "directory": ".output/public",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "d1_databases": [{ "binding": "DB", "database_name": "meetnote-db", "database_id": "0e681cd4-af66-496f-848f-f526feba3806", "migrations_dir": "migrations" }],
+  "r2_buckets": [{ "binding": "RECORDINGS", "bucket_name": "meetnote-recordings" }],
+  "durable_objects": { "bindings": [{ "name": "MEETINGS", "class_name": "MeetingRoom" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["MeetingRoom"] }],
+  "secrets": { "required": ["USER_KEYS_ENCRYPTION_KEY"] },
+  "observability": { "enabled": true, "head_sampling_rate": 0.1 }
+}

@@ -1,0 +1,34 @@
+{
+  "name": "meetnote-web",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.4.4",
+  "scripts": {
+    "dev": "wrangler dev --port 3468",
+    "dev:ui": "bun --bun node_modules/nuxt/bin/nuxt.mjs dev --host 127.0.0.1",
+    "build": "bun --bun node_modules/nuxt/bin/nuxt.mjs generate",
+    "start": "bun run dev",
+    "typecheck": "bun --bun node_modules/nuxt/bin/nuxt.mjs typecheck && bun --bun node_modules/typescript/bin/tsc -p worker/tsconfig.json --noEmit",
+    "postinstall": "bun --bun node_modules/nuxt/bin/nuxt.mjs prepare",
+    "db:migrate": "wrangler d1 migrations apply meetnote-db --local",
+    "deploy": "wrangler deploy",
+    "cf:types": "wrangler types",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "@nuxt/ui": "4.12.0",
+    "nuxt": "4.6.3",
+    "ofetch": "^1.5.1",
+    "tailwindcss": "^4.1.0",
+    "zod": "^4.0.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261028.1",
+    "@types/bun": "^1.3.0",
+    "@types/node": "^26.6.5",
+    "@types/ws": "^8.18.0",
+    "typescript": "^5.9.0",
+    "vue-tsc": "^3.1.0",
+    "wrangler": "^4.154.0"
+  }
+}
