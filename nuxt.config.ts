@@ -2,6 +2,8 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-10-28',
   modules: ['@nuxt/ui'],
   ssr: false,
+  // The API and Durable Objects run in worker/index.ts, independently of Nitro.
+  nitro: { preset: 'static' },
   colorMode: { preference: 'light' },
   css: ['~/assets/css/main.css'],
   devtools: { enabled: false },

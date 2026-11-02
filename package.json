@@ -11,7 +11,7 @@
     "typecheck": "bun --bun node_modules/nuxt/bin/nuxt.mjs typecheck && bun --bun node_modules/typescript/bin/tsc -p worker/tsconfig.json --noEmit",
     "postinstall": "bun --bun node_modules/nuxt/bin/nuxt.mjs prepare",
     "db:migrate": "wrangler d1 migrations apply meetnote-db --local",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --config wrangler.jsonc",
     "cf:types": "wrangler types",
     "test": "bun test"
   },

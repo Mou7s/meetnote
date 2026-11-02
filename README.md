@@ -36,7 +36,9 @@ bun run dev
 
 ## 部署
 
-Cloudflare Git 构建使用仓库根目录（留空或 `/`），构建命令为 `bun run build`，部署命令为 `bun run deploy`。依赖使用 `bun install --frozen-lockfile` 安装；`package.json` 与 `bun.lock` 均位于根目录。
+Cloudflare Git 构建使用仓库根目录（留空或 `/`），构建命令为 `bun run build`，部署命令为 `bun run deploy`（或 `npx wrangler deploy --config wrangler.jsonc`）。依赖使用 `bun install --frozen-lockfile` 安装；`package.json` 与 `bun.lock` 均位于根目录。
+
+Nuxt 固定使用 `static` 预设，只生成 `.output/public`；API 与 Durable Objects 由 `worker/index.ts` 提供。不要改用 Nitro 自动生成的 Worker 配置，以免覆盖现有入口。
 
 本次账号中的 D1 meetnote-db、R2 meetnote-recordings 和 Durable Object 已创建并绑定。换账号部署时需要新建资源并替换 wrangler.jsonc 的 D1 ID。
 
