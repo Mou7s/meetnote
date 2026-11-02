@@ -13,3 +13,17 @@ Models/
 *.wav
 .env
 .env.*
+
+node_modules/
+.nuxt/
+.output/
+dist/
+.data/
+!.env.example
+coverage/
+.wrangler/
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+**/.asr-eval-venv/

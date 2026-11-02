@@ -1,165 +1,87 @@
 # MeetNote · 实时会议助手
 
-录音、实时转写与 AI 会议整理：左侧查看录音内容，右侧查看分析结果。仓库包含 Web 版与 Windows 桌面版，两者独立运行。
+Nuxt 4 + Nuxt UI 4 + TypeScript，Bun 安装与构建，部署 Cloudflare Workers。
 
-## Web 版
+## 使用
 
-**[打开 MeetNote Web](https://meetnote.mou7s.workers.dev/)**，无需注册或登录。首次填写自己的百炼与 DeepSeek API Key，也可跳过密钥仅录音。
+打开 [MeetNote Web](https://meetnote.mou7s.workers.dev/) 即可使用，**不注册、不登录、不创建账号**。
 
-- 支持麦克风选择、音量显示、暂停/恢复、在线转写和重点标记。
-- 点击“立即分析”，流式总结截至点击时的全部确认转写；录音中可使用，当前不自动分析。
-- 支持会议历史、录音回放与下载、JSON 导出。
-- 每个浏览器使用独立工作空间，密钥在服务端加密保存。换浏览器、清除 Cookie 或标识过期后无法找回原空间，当前没有跨设备同步。
-- 在线转写将音频发送至百炼，AI 分析将转写文本发送至 DeepSeek，费用计入用户填写的服务商账号。
+首次进入填写自己的百炼 API Key、北京地域 API Host 和 DeepSeek API Key，保存后进入会议工作台。模型调用费用计入填写的服务商账号，也可以跳过密钥，仅录音。
 
-技术栈为 Nuxt 4、Nuxt UI 4、TypeScript 与 Bun，运行于 Cloudflare Workers，使用 D1、R2 与 Durable Objects。
+会议和密钥通过当前浏览器的 HttpOnly、SameSite=Strict Cookie 独立标识隔离，线上 Cookie 使用 Secure。标识最长有效一年，换浏览器、清除 Cookie 或标识过期后无法找回原工作空间；当前没有跨设备同步。旧版已有有效会话的浏览器会自动接续原有数据。旧账号数据保留，登录、注册、初始化和账号管理接口已关闭。
 
-开发入口：
+密钥以 AES-256-GCM 加密保存在 D1，使用工作空间内部 ID 作为附加认证数据，保存后不回显。请求经本站服务端转发，调用时服务端会解密使用，属于服务端转发模式，不是端到端加密。Workers Secrets 仅需站点加密主密钥 USER_KEYS_ENCRYPTION_KEY，不保存共享模型密钥。
+
+## 架构
+
+- Nuxt 静态客户端由 Workers Static Assets 提供，同域 /api/* 由 Worker 处理。
+- D1 保存浏览器工作空间映射、加密设置、访问标识与会议索引。历史 users/sessions 表为内部兼容存储，不再要求用户输入账号或密码。
+- 每场会议一个 SQLite Durable Object，管理会议状态、转写、分析、音频顺序与去重、百炼连接。
+- 私有 R2 保存约 1 MB 一段的 PCM；未归档音频先持久化到 Durable Object SQLite。回放组合 WAV 并支持 HTTP Range。
+
+## 本地开发
+
+需要 Bun 1.4.4 和 Wrangler 支持的 Node.js。Wrangler 当前不能直接由 Bun 运行，仅 Wrangler 使用 Node；依赖安装、Nuxt 构建和测试继续使用 Bun。
 
 ```powershell
-cd web
 bun install --frozen-lockfile
 Copy-Item .dev.vars.example .dev.vars
-# 按 web/README.md 配置本地加密主密钥后继续。
+# 在 .dev.vars 设置 USER_KEYS_ENCRYPTION_KEY，为 64 位十六进制随机值。
 bun run build
 bun run db:migrate
 bun run dev
 ```
 
-访问本地地址 `http://127.0.0.1:3468`。详细配置、部署与限制见 [Web 版说明](web/README.md)，迁移记录见 [WEB-MIGRATION.md](WEB-MIGRATION.md)。
+访问 http://127.0.0.1:3468。Wrangler 本地模拟 Workers、D1、R2 和 Durable Objects。填写真实模型密钥后仍会调用真实服务商。
 
-Web 版单场录音最多两小时，需保持页面打开；尚无全文检索、共享、删除、桌面历史导入、本地识别或说话人区分。真实麦克风、云端模型效果和长时间录音仍待完整验证。
+## 部署
 
-## Windows 桌面版
+Cloudflare Git 构建使用仓库根目录（留空或 `/`），构建命令为 `bun run build`，部署命令为 `bun run deploy`。依赖使用 `bun install --frozen-lockfile` 安装；`package.json` 与 `bun.lock` 均位于根目录。
 
-原生 WinUI 3 + .NET 8 应用，源码位于仓库根目录。支持在线识别、本地 Whisper / sherpa-onnx 识别、自动 AI 分析、分析历史和重点标记。以下为桌面版使用与开发说明；其设置、数据存储和自动分析行为独立于 Web 版。
+本次账号中的 D1 meetnote-db、R2 meetnote-recordings 和 Durable Object 已创建并绑定。换账号部署时需要新建资源并替换 wrangler.jsonc 的 D1 ID。
 
-### 当前功能
+新站点首次部署时生成 USER_KEYS_ENCRYPTION_KEY，通过 wrangler deploy --secrets-file 安全提交包含该项的本地 JSON 文件，文件放在忽略的 .data/ 内。**已有站点不能重新生成主密钥**，否则已保存的模型密钥无法解密，应妥善备份。不要将主密钥写入 Git、日志或命令行参数。
 
-- 麦克风选择、真实输入音量波形、录音计时、暂停/恢复、结束保存和退出确认。
-- 默认在线模型 `qwen-audio-3.1-asr-flash-streaming`，使用远场会议 VAD；可切换 `fun-asr-realtime` 或 `paraformer-realtime-v2`。
-- 在线识别在后台发送音频，按固定音频时间轴控制发送节奏，显示已发送时长和待发送秒数。暂停时结束云端任务，恢复后建立新任务，时间戳沿本地录音时间轴累计。
-- Qwen 3.1 支持会议背景和专业词提示。厂家、人名、工艺及型号应使用确认过的写法；提示不保证识别正确，也不直接替换已生成文字。
-- 可选 Whisper large-v3-turbo 本地分段识别，以及 sherpa-onnx Paraformer 本地流式识别。
-- DeepSeek 默认自动分析：有新增确认转写时最快每 5 秒开始一轮，上轮未完成时不并发请求；生成内容流式显示，无新增内容时不请求。
-- AI 分析按时间段追加，旧记录保留；生成失败保留之前的完整记录。自动分析开启时，会议结束另生成整场总结。
-- 右侧默认“锁定最新”，生成及追加时跟随底部；取消勾选可回看，点击“查看最新”重新锁定。
-- 录音、转写、重点标记、分段分析和识别错误信息保存到本地。转写断开时原始录音继续保存，并提示转写不完整。
-- DPI 感知窗口与自适应导航。历史页目前通过资源管理器打开会议目录。
-
-尚未实现：说话人区分、应用内历史回放与全文检索、托盘及快捷键。
-
-### 在线转写设置
-
-1. 在[百炼 API Key 页面](https://bailian.console.aliyun.com/cn-beijing/model/settings/api-key)创建华北2（北京）地域的密钥。这里指服务地域，用户不需要位于北京。
-2. 在 MeetNote 设置中选择“在线转写 · 阿里云百炼”，填写百炼 API Key。
-3. 将创建密钥时提供的 **API Host** 填入对应字段，仅填写主机名。业务空间密钥应使用对应的 `ws-<workspace>.cn-beijing.maas.aliyuncs.com`；旧域名 `dashscope.aliyuncs.com` 也可配置。程序仅接受这两类北京地域百炼地址。
-4. 选择 Qwen-Audio 3.1 实时会议模型，保存后开始录音。目标 ASR 模型需在业务空间开通调用权限。
-5. 可填写会议背景（最多400个字符）及专业词（每行一个、最多50个，去重后按普通权重发送）。保存后在下一次录音生效。
-
-在线模式会上传麦克风音频至阿里云，原始音频同时保存在本地；暂停期间不采集、不上传。免费额度、有效期及超额费用请查看[百炼控制台](https://bailian.console.aliyun.com/cn-beijing/costing-balance/free-quota)，不在文档中固定承诺价格。
-
-接口说明：[Qwen Streaming 客户端事件](https://help.aliyun.com/zh/model-studio/qwen-audio-asr-streaming-client-events)、[服务端事件](https://help.aliyun.com/zh/model-studio/qwen-audio-asr-streaming-server-events)。
-
-### AI 分析
-
-设置中填写 **DeepSeek 独立的 API Key**，默认模型代号为 `deepseek-flash`，调用 DeepSeek 官方接口。百炼充值余额不能用于 DeepSeek。
-
-分析面板中的“实时 AI 分析”开关立即生效并保存；“立即分析”用于手动分析新增转写。“重新总结”会仅依据左侧当前全部确认转写生成整体总结，成功后替换右侧分析及保存的分析记录，失败时保留原内容。生成过程中继续到达的转写，会由后续自动分析补充。结束录音时，程序等待剩余转写和当前分析完成，再按自动分析设置生成最终总结。
-
-DeepSeek 接收会议主题、已有分析背景和确认转写文本，不接收音频；调用会产生 DeepSeek API 费用。百炼与 DeepSeek 密钥分别保存在 Windows 凭据管理器，不写入设置 JSON、会议文件或 Git。
-
-分析是对转写文字的辅助整理。人名、术语、数字、负责人和日期都应结合原始录音确认，不能把公开样本通过当作现场准确率保证。
-
-### 本地识别（可选）
-
-#### Whisper large-v3-turbo
-
-安装 [uv](https://docs.astral.sh/uv/)，然后运行：
+已有部署更新：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/Install-Whisper.ps1
+bun run typecheck
+bun run build
+bun test
+bun x wrangler d1 migrations apply meetnote-db --remote
+bun run deploy
 ```
 
-脚本准备 Python 3.12、faster-whisper 和约 1.6 GB 模型。环境位于 `%LOCALAPPDATA%\MeetingCompanion\WhisperRuntime`；设置中模型目录应包含 `model.bin`、`config.json` 和 `tokenizer.json`。
+R2 不应开启公开读取，所有会议、录音和密钥访问均按浏览器工作空间隔离。当前配置兼容 Workers Free，不声明自定义 CPU 限额；按真实用量监测站点与存储费用。
 
-Whisper 通过独立后台进程运行，CPU int8 推理，在停顿后分段出字，连续发言时约每15秒处理一段。开始录音后加载模型，加载期间的音频排队等待识别。运行阶段只使用本地模型文件，结束时等待剩余片段完成。速度和准确度取决于电脑与收音条件。
+## 功能与检查
 
-Python 环境和 Whisper 模型不包含在原生发布目录中，换电脑后需要重新安装。
+支持麦克风选择、音量、16 kHz PCM16 采集、暂停恢复、分块上传重试、在线转写、手动触发的流式全文总结、重点标记、历史回放下载和 JSON 导出。
 
-#### Paraformer
+workerd 集成检查覆盖无账号初始化、来源校验、工作空间与密钥隔离、加密不回显、旧账号接口关闭、音频顺序去重、WAV 和 Range、R2 归档边界、重启持久性与伪造标识拦截。另有全文总结检查，确认已有分析后仍提交全部确认转写。测试不调用真实模型服务。
 
-```powershell
-powershell -ExecutionPolicy Bypass -File scripts/Install-Model.ps1
+线上已验证无登录打开、个人密钥保存/不回显/移除、不同工作空间隔离、旧登录注册接口关闭。真实麦克风、云端模型效果和长时间录音尚未完成验证。
+
+## 边界
+
+- 浏览器需保持页面打开，未上传内存队列会在刷新/关闭时丢失。积压约 20 秒停止采集并提示重试；服务器已确认的分块已持久化。
+- 单场录音最多两小时，列表暂显示最近 200 场。
+- 点击“立即分析”总结截至点击时的全部已确认转写；录音中也可使用，不自动触发分析。
+- 尚无全文检索、共享、删除、桌面历史导入、本地 Whisper/sherpa 或说话人区分。
+- 活跃的百炼出站 WebSocket 需要常驻 Durable Object，不能依靠休眠免去该时段计算费用。
+
+Windows 桌面版源码位于 [desktop/](desktop/README.md)，仍可独立运行；迁移记录见 [WEB-MIGRATION.md](WEB-MIGRATION.md)。
+
+## 目录结构
+
+```text
+app/              Nuxt 页面、组件、样式和录音逻辑
+public/           静态资源与 AudioWorklet
+shared/           前后端共享类型
+worker/           Cloudflare API 与会议 Durable Object
+migrations/       D1 数据库迁移
+tests/            Web 自动检查
+desktop/          独立的 WinUI 3 Windows 桌面项目
+nuxt.config.ts    Nuxt 配置
+wrangler.jsonc    Workers 资源绑定与部署配置
 ```
-
-安装 sherpa-onnx 中英流式 Paraformer 模型，随后在设置中切换到轻量模型。模型目录需包含 `encoder.int8.onnx`、`decoder.int8.onnx`、`tokens.txt`。发布时会复制本机已安装的 Paraformer 模型；不含模型的发布包需要另行安装。
-
-本地转写不需要云端识别密钥；如开启 DeepSeek 分析，转写文字仍会发送至 DeepSeek。
-
-### 数据存储
-
-每场会议保存在 `%LOCALAPPDATA%\MeetingCompanion\Meetings` 的独立目录：
-
-- `recording.wav`：16 kHz、16 bit、单声道 PCM 原始音频。
-- `meeting.json`：主题、时长、录音状态、转写方式、云端模型、转写错误、标记、确认转写、分析文本和 `analysisUpdates` 分段记录。
-
-暂停时间不计入录音文件时长。转写时间戳为录音时间轴上的近似位置。分析历史从新版开始保存，旧版本已覆盖的摘要不会自动恢复；原始转写仍在会议文件中。
-
-### 开发与检查
-
-需要 Windows 10 1809 或更高版本、.NET 8 SDK，目标为 Windows x64。
-
-```powershell
-dotnet run --project MeetNote.csproj -c Release
-```
-
-不访问外部 API、不读取会议录音的协议检查：
-
-```powershell
-dotnet run --project tests/MeetNote.Checks.csproj -c Release -- --cloud-protocol
-dotnet run --project tests/MeetNote.Checks.csproj -c Release -- --analysis-stream
-```
-
-默认检查命令还会使用已安装 Paraformer 模型的官方测试 WAV，检查本地识别、结束刷新及模型查找；DeepSeek 使用模拟响应：
-
-```powershell
-dotnet run --project tests/MeetNote.Checks.csproj -c Release
-```
-
-发布程序检查选项：
-
-| 参数 | 内容 | 外部调用 |
-|---|---|---|
-| `--check-cloud-ui` | 创建窗口，检查 XAML 和设置加载后退出 | 无 |
-| `--check-whisper` | 加载 Whisper 模型并退出，不送入音频 | 无 |
-| `--check-transcriber` | 用官方 WAV 检查本地 Paraformer | 无 |
-| `--check-cloud-service [wav路径]` | 用已保存密钥启动当前云端模型；可选 WAV 必须为16kHz单声道PCM16 | 会调用百炼，指定 WAV 时上传该文件 |
-
-检查报告写入当前用户的 `MeetingCompanion` 本地数据目录。`--configure-cloud` 是凭据配置辅助入口，从标准输入接收配置、保存凭据并检查连接；不要将密钥写入命令行、脚本或仓库。验证结果与限制见 [VALIDATION.md](VALIDATION.md)。
-
-### 发布
-
-```powershell
-dotnet publish MeetNote.csproj -c Release -r win-x64 --self-contained true -o ../meetnote-windows
-```
-
-运行完整目录中的 `MeetNote.exe`，不能单独复制 exe。发布前关闭该目录中运行的程序；也可发布到另一个目录后结束旧录音再切换。
-
-Windows App SDK 与 sherpa-onnx 都提供 `onnxruntime.dll`。项目明确复制 sherpa 配套的 1.28.2 运行库，避免 ABI 冲突。升级 sherpa 时需同步修改复制路径，并重新检查实际发布进程。Whisper 的 Python/ONNX 依赖运行在独立进程中。
-
-### 源码结构
-
-| 文件 | 职责 |
-|---|---|
-| `MainWindow.xaml` / `.xaml.cs` | 录音工作台、设置、分析历史和滚动跟随 |
-| `Recorder.cs` | 麦克风采集与 WAV 保存 |
-| `ILocalTranscriber.cs` | 转写事件及输入接口，在线与本地实现共用 |
-| `CloudTranscriber.cs` / `AsrHints.cs` | 百炼 WebSocket、发送时钟、结果解析与识别提示 |
-| `LocalTranscriber.cs` / `ModelLocator.cs` | sherpa 流式识别和模型查找 |
-| `WhisperTranscriber.cs` / `scripts/whisper_worker.py` | 本地 Whisper 进程和分段识别 |
-| `DeepSeekAnalyzer.cs` / `AnalysisUpdate.cs` | 流式 AI 分析与分段记录 |
-| `AssistantSettings.cs` | 用户设置和 Windows 凭据存储 |
-| `App.xaml.cs` | 应用入口与发布程序检查 |
-
-编译产物、录音、模型、Python 环境和密钥不应提交到源码仓库。

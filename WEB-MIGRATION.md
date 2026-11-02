@@ -2,7 +2,7 @@
 
 当前产品要求：Nuxt + Bun + Nuxt UI，Cloudflare Workers，**打开即用，无需账号登录，用户自行填写 API Key**。
 
-工程位于 web/，说明见 [web/README.md](web/README.md)。桌面源码保留。
+Nuxt 工程位于仓库根目录，说明见 [README.md](README.md)。桌面源码保留在 [desktop/](desktop/README.md)。
 
 ## 已实现
 
