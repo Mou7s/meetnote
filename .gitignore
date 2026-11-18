@@ -1,29 +1,19 @@
-# .NET build output
-**/bin/
-**/obj/
-
-# IDE and user-specific files
-.vs/
-*.user
-*.suo
-
-# Local model/data files and secrets
-Models/
-*.onnx
-*.wav
+# Environment & secrets
 .env
 .env.*
-
-node_modules/
-.nuxt/
-.output/
-dist/
-.data/
 !.env.example
-coverage/
-.wrangler/
 .dev.vars
 .dev.vars.*
 !.dev.vars.example
 
-**/.asr-eval-venv/
+# Dependencies & build output
+node_modules/
+.nuxt/
+.output/
+dist/
+coverage/
+
+# Local Wrangler / test state
+.data/
+.wrangler/
+*.wav

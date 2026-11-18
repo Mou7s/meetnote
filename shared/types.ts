@@ -7,3 +7,7 @@ export interface Meeting {
   bytes: number; nextSeq: number; context: string; terms: string; autoAnalyze: boolean;
   error: string; analyzedCount: number; segments: Segment[]; analyses: Analysis[]; interim?: { time: number; text: string } | null
 }
+export type MeetingSummary = Omit<Meeting, 'segments' | 'analyses' | 'interim'> & {
+  segmentCount: number
+  analysisCount: number
+}

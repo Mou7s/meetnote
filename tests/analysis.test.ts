@@ -1,7 +1,7 @@
 import { test, expect } from 'bun:test'
-import { generateAnalysis } from '../worker/analysis'
+import { generateAnalysis } from '../worker/services/analysis'
 import type { Meeting } from '../shared/types'
-import type { ProviderSettings } from '../worker/settings'
+import type { ProviderSettings } from '../worker/services/settings'
 
 test('manual summary includes all confirmed segments even after a previous analysis', async () => {
   const original = globalThis.fetch

@@ -69,21 +69,31 @@ workerd 集成检查覆盖无账号初始化、来源校验、工作空间与密
 - 浏览器需保持页面打开，未上传内存队列会在刷新/关闭时丢失。积压约 20 秒停止采集并提示重试；服务器已确认的分块已持久化。
 - 单场录音最多两小时，列表暂显示最近 200 场。
 - 点击“立即分析”总结截至点击时的全部已确认转写；录音中也可使用，不自动触发分析。
-- 尚无全文检索、共享、删除、桌面历史导入、本地 Whisper/sherpa 或说话人区分。
+- 尚无全文检索、共享、删除或说话人区分。
 - 活跃的百炼出站 WebSocket 需要常驻 Durable Object，不能依靠休眠免去该时段计算费用。
-
-Windows 桌面版源码位于 [desktop/](desktop/README.md)，仍可独立运行；迁移记录见 [WEB-MIGRATION.md](WEB-MIGRATION.md)。
 
 ## 目录结构
 
 ```text
-app/              Nuxt 页面、组件、样式和录音逻辑
-public/           静态资源与 AudioWorklet
-shared/           前后端共享类型
-worker/           Cloudflare API 与会议 Durable Object
-migrations/       D1 数据库迁移
-tests/            Web 自动检查
-desktop/          独立的 WinUI 3 Windows 桌面项目
-nuxt.config.ts    Nuxt 配置
-wrangler.jsonc    Workers 资源绑定与部署配置
+app/
+  app.config.ts              Nuxt UI 主题配置
+  app.vue                    应用外壳与视图切换
+  assets/css/main.css        全局与页面样式
+  components/                工作台、录音控制、历史列表、设置表单组件
+  composables/               录音队列与工作空间状态逻辑
+  utils/                     时长/日期格式化与错误提取
+public/
+  favicon.svg                站点图标
+  worklets/pcm.js            AudioWorklet 16 kHz PCM16 重采样
+shared/
+  types.ts                   前后端共享类型
+worker/
+  index.ts                   Workers API 入口与路由分发
+  durable-objects/           MeetingRoom Durable Object
+  services/                  百炼转写、DeepSeek 分析与个人密钥加解密
+  lib/                       匿名工作空间鉴权、限流与 HTTP 工具
+migrations/                  D1 数据库迁移
+tests/                       Web 单元与集成测试
+nuxt.config.ts               Nuxt 配置
+wrangler.jsonc               Workers 资源绑定与部署配置
 ```
