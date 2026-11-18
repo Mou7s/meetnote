@@ -37,9 +37,19 @@ const showHistory = ref(false)
 const copied = ref(false)
 let copyTimer: ReturnType<typeof setTimeout> | undefined
 
+const DEFAULT_MIC_VALUE = '__default__'
+
+const deviceOptions = computed(() => [
+  { label: '默认麦克风', value: DEFAULT_MIC_VALUE },
+  ...props.devices.map((mic, index) => ({
+    label: mic.label || `麦克风 ${index + 1}`,
+    value: mic.deviceId
+  }))
+])
+
 const selectedDevice = computed({
-  get: () => props.device,
-  set: value => emit('update:device', value)
+  get: () => props.device || DEFAULT_MIC_VALUE,
+  set: value => emit('update:device', value === DEFAULT_MIC_VALUE ? '' : value)
 })
 
 const followLatest = computed({
@@ -118,12 +128,13 @@ onBeforeUnmount(() => clearTimeout(copyTimer))
     <span v-if="pending" class="pending">{{ pendingSeconds.toFixed(1) }} 秒待上传</span>
     <div class="recording-actions">
       <template v-if="['ready', 'paused', 'interrupted'].includes(selected.status)">
-        <select v-model="selectedDevice" aria-label="选择麦克风">
-          <option value="">默认麦克风</option>
-          <option v-for="(mic, index) in devices" :key="mic.deviceId" :value="mic.deviceId">
-            {{ mic.label || `麦克风 ${index + 1}` }}
-          </option>
-        </select>
+        <USelect
+          v-model="selectedDevice"
+          :items="deviceOptions"
+          icon="i-lucide-mic"
+          aria-label="选择麦克风"
+          class="mic-select"
+        />
         <UButton color="neutral" variant="ghost" :disabled="busy" @click="emit('loadMicrophones')">选择设备</UButton>
         <UButton :loading="busy" :disabled="analyzing" @click="emit('record')">
           {{ selected.status === 'ready' ? '开始录音' : '继续录音' }}
@@ -247,7 +258,7 @@ onBeforeUnmount(() => clearTimeout(copyTimer))
           <div v-if="showHistory" class="snapshot-list">
             <article v-for="item in olderAnalyses" :key="item.id" class="analysis-entry snapshot-item">
               <div class="analysis-meta">
-                <UBadge :color="item.final ? 'primary' : 'neutral'" variant="soft" size="xs">
+                <UBadge :color="item.final ? 'primary' : 'neutral'" variant="subtle" size="xs">
                   {{ item.final ? '全文纪要' : '实时增量' }}
                 </UBadge>
                 <time>{{ formatDate(item.created) }}</time>

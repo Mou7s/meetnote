@@ -33,7 +33,7 @@ const emit = defineEmits<{
         </small>
       </div>
       <span>{{ formatDuration(meeting.bytes / 32000) }}</span>
-      <UBadge color="neutral" variant="soft">{{ MEETING_STATUS_LABEL[meeting.status] }}</UBadge>
+      <UBadge color="neutral" variant="subtle">{{ MEETING_STATUS_LABEL[meeting.status] }}</UBadge>
       <span>↗</span>
     </button>
   </div>

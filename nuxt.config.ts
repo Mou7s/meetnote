@@ -15,15 +15,14 @@ export default defineNuxtConfig({
     userKeysEncryptionKey: '',
     dataDir: '.data/store'
   },
-  colorMode: { preference: 'light' },
+  colorMode: { preference: 'system', fallback: 'light' },
   css: ['~/assets/css/main.css'],
   devtools: { enabled: false },
   app: {
     head: {
       title: 'MeetNote · 会议工作空间',
       htmlAttrs: { lang: 'zh-CN' },
-      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
-      meta: [{ name: 'theme-color', content: '#059669' }]
+      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]
     }
   },
   typescript: { tsConfig: { compilerOptions: { types: ['bun'] } } }

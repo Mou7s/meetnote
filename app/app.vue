@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { zh_cn } from '@nuxt/ui/locale'
+
 const {
   ready,
   view,
@@ -35,6 +37,18 @@ const {
   toggleAutoAnalyze,
   analyzeMeeting
 } = useWorkspace()
+
+const colorMode = useColorMode()
+const colorModeTooltip = computed(() => (colorMode.value === 'dark' ? '切换到浅色模式' : '切换到深色模式'))
+
+useHead({
+  meta: [
+    {
+      name: 'theme-color',
+      content: computed(() => (colorMode.value === 'dark' ? '#0f172a' : '#ffffff'))
+    }
+  ]
+})
 
 const pageTitle = computed(() =>
   view.value === 'history' ? '会议记录' : view.value === 'settings' ? '个人设置' : '会议工作台'
@@ -73,7 +87,7 @@ const navItems = computed(() => [
 </script>
 
 <template>
-  <UApp>
+  <UApp :locale="zh_cn">
     <UDashboardGroup class="shell" storage="local" storage-key="meetnote-dashboard">
       <UDashboardSidebar class="sidebar" :toggle="false" :default-size="17" :min-size="14" :max-size="20">
         <template #header>
@@ -116,12 +130,21 @@ const navItems = computed(() => [
           </div>
           <p v-else class="sidebar-empty">录音完成后会显示在这里。</p>
         </template>
+        <template #footer>
+          <div class="sidebar-footer">
+            <p class="nav-label">外观主题</p>
+            <UColorModeSelect size="sm" variant="outline" color="neutral" class="full" />
+          </div>
+        </template>
       </UDashboardSidebar>
 
       <UDashboardPanel class="main">
         <template #header>
           <UDashboardNavbar :title="pageTitle" class="topbar">
             <template #right>
+              <UTooltip :text="colorModeTooltip">
+                <UColorModeButton />
+              </UTooltip>
               <UBadge :color="ready ? 'success' : error ? 'error' : 'neutral'" variant="subtle" class="server-state">
                 <span class="server-dot" /> {{ ready ? '服务已连接' : error ? '连接异常' : '正在连接…' }}
               </UBadge>
