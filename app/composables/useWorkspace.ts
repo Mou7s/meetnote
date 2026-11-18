@@ -1,5 +1,5 @@
 import { $fetch as api } from 'ofetch'
-import type { Meeting, MeetingSummary, UserConfig } from '../../shared/types'
+import type { ConfigTestResult, Meeting, MeetingSummary, UserConfig } from '../../shared/types'
 
 export type WorkspaceView = 'workspace' | 'history' | 'settings'
 
@@ -12,6 +12,21 @@ export interface PersonalSettingsPayload {
   aliyunModel: string
   deepseekModel: string
 }
+
+export type ConfigTestPayload =
+  | {
+      service: 'asr'
+      aliyunKey?: string
+      useSaved: boolean
+      aliyunHost: string
+      aliyunModel: string
+    }
+  | {
+      service: 'ai'
+      deepseekKey?: string
+      useSaved: boolean
+      deepseekModel: string
+    }
 
 export function useWorkspace() {
   const ready = ref(false)
@@ -27,9 +42,11 @@ export function useWorkspace() {
     ai: false,
     aliyunHost: 'dashscope.aliyuncs.com',
     aliyunModel: 'qwen-audio-3.1-asr-flash-streaming',
-    deepseekModel: 'deepseek-flash'
+    deepseekModel: 'deepseek-flash',
+    encryptionReady: true
   })
   const analyzing = ref(false)
+  const analyzingMode = ref<'incremental' | 'full' | null>(null)
   const streaming = ref('')
   const follow = ref(true)
   const settingsSaved = ref(false)
@@ -45,6 +62,9 @@ export function useWorkspace() {
 
   let poll: ReturnType<typeof setInterval> | undefined
   let polling = false
+  let analyzeController: AbortController | null = null
+  let lastAutoAnalyzeEndedAt = 0
+  let autoAnalyzeBackoffUntil = 0
 
   async function run(action: () => Promise<unknown>) {
     if (busy.value) return
@@ -81,19 +101,31 @@ export function useWorkspace() {
     })
   }
 
-  async function saveSettings(payload: PersonalSettingsPayload) {
+  async function saveSettings(payload: PersonalSettingsPayload, enterWorkspace = false) {
     settingsSaved.value = false
     await run(async () => {
       config.value = await api('/api/config', { method: 'PUT', body: payload })
-      settingsSaved.value = true
-      view.value = 'workspace'
+      settingsSaved.value = !enterWorkspace
+      if (enterWorkspace) view.value = 'workspace'
     })
+  }
+
+  async function testProviderConfig(payload: ConfigTestPayload): Promise<ConfigTestResult> {
+    try {
+      return await api<ConfigTestResult>('/api/config/test', { method: 'POST', body: payload })
+    } catch (e) {
+      return { ok: false, message: extractErrorMessage(e) }
+    }
   }
 
   async function openMeeting(id: string) {
     if (recorder.active.value && id !== selected.value?.id) {
       error.value = '请先结束当前录音再切换会议'
       return
+    }
+    if (id !== selected.value?.id && analyzeController) {
+      analyzeController.abort()
+      streaming.value = ''
     }
     await run(async () => {
       selected.value = await api(`/api/meetings/${id}`)
@@ -103,7 +135,13 @@ export function useWorkspace() {
   }
 
   async function startNewRecording() {
+    if (analyzeController) {
+      analyzeController.abort()
+      streaming.value = ''
+    }
     selected.value = null
+    lastAutoAnalyzeEndedAt = Date.now()
+    autoAnalyzeBackoffUntil = 0
     await run(async () => {
       const now = new Date()
       const title = `录音 ${now.toLocaleString('zh-CN', {
@@ -116,7 +154,7 @@ export function useWorkspace() {
       })}`
       const meeting = await api<Meeting>('/api/meetings', {
         method: 'POST',
-        body: { title, autoAnalyze: false }
+        body: { title, autoAnalyze: config.value.ai }
       })
       selected.value = meeting
       view.value = 'workspace'
@@ -144,6 +182,7 @@ export function useWorkspace() {
 
   async function record() {
     if (!selected.value) return
+    lastAutoAnalyzeEndedAt = Date.now()
     await run(async () => {
       await recorder.begin(selected.value!, device.value)
       await refreshList()
@@ -162,6 +201,11 @@ export function useWorkspace() {
   }
 
   async function finish() {
+    if (analyzeController) {
+      analyzeController.abort()
+      streaming.value = ''
+    }
+    let stoppedOk = false
     await run(async () => {
       if (recorder.active.value) await recorder.finish()
       else if (selected.value) {
@@ -171,20 +215,46 @@ export function useWorkspace() {
         })
       }
       await refreshList()
+      stoppedOk = true
     })
+    if (stoppedOk && config.value.ai && selected.value?.autoAnalyze && selected.value.segments.length > 0) {
+      await analyzeMeeting(true)
+    }
   }
 
-  async function analyzeMeeting() {
-    if (analyzing.value || !selected.value) return
-    analyzing.value = true
-    streaming.value = ''
-    error.value = ''
+  async function toggleAutoAnalyze(enabled: boolean) {
+    if (!selected.value) return
+    autoAnalyzeBackoffUntil = 0
+    await run(async () => {
+      selected.value = await api(`/api/meetings/${selected.value!.id}/auto-analyze`, {
+        method: 'POST',
+        body: { enabled }
+      })
+    })
+    if (enabled) maybeAutoAnalyze()
+  }
+
+  async function analyzeMeeting(final = true, options: { silent?: boolean } = {}) {
+    if (analyzing.value || !selected.value || !config.value.ai || !selected.value.segments.length) return
     const id = selected.value.id
+    const isIncremental =
+      !final &&
+      selected.value.analyses.length > 0 &&
+      selected.value.analyzedCount > 0 &&
+      selected.value.analyzedCount < selected.value.segments.length
+    analyzing.value = true
+    analyzingMode.value = isIncremental ? 'incremental' : 'full'
+    streaming.value = ''
+    if (!options.silent) error.value = ''
+
+    const controller = new AbortController()
+    analyzeController = controller
     try {
       const response = await fetch(`/api/meetings/${id}/analyze`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ final: true })
+        body: JSON.stringify({ final }),
+        signal: controller.signal
       })
       if (!response.ok || !response.body) {
         const body = (await response.json()) as { statusMessage?: string }
@@ -219,22 +289,38 @@ export function useWorkspace() {
         selected.value = await api(`/api/meetings/${id}`)
         streaming.value = ''
       }
+      autoAnalyzeBackoffUntil = 0
     } catch (e) {
+      if (e instanceof Error && e.name === 'AbortError') return
       error.value = extractErrorMessage(e)
       streaming.value = ''
+      if (options.silent) autoAnalyzeBackoffUntil = Date.now() + 60000
     } finally {
+      lastAutoAnalyzeEndedAt = Date.now()
+      if (analyzeController === controller) analyzeController = null
       analyzing.value = false
+      analyzingMode.value = null
     }
   }
 
-  async function markSegment(segmentId: string) {
-    if (!selected.value) return
-    await run(async () => {
-      selected.value = await api(`/api/meetings/${selected.value!.id}/mark`, {
-        method: 'POST',
-        body: { segmentId }
-      })
-    })
+  function maybeAutoAnalyze() {
+    if (!ready.value || analyzing.value || busy.value || !config.value.ai || !selected.value) return
+    const current = selected.value
+    if (!current.autoAnalyze || current.status !== 'recording') return
+    if (Date.now() < autoAnalyzeBackoffUntil) return
+
+    const delta = current.segments.length - current.analyzedCount
+    if (delta <= 0) return
+
+    const elapsedSinceLast = Date.now() - lastAutoAnalyzeEndedAt
+    const shouldStart =
+      (current.analyses.length === 0 && delta >= 2 && elapsedSinceLast >= 8000) ||
+      (elapsedSinceLast >= 20000 && delta >= 1) ||
+      (elapsedSinceLast >= 10000 && delta >= 5)
+
+    if (shouldStart) {
+      void analyzeMeeting(false, { silent: true })
+    }
   }
 
   async function tick() {
@@ -246,7 +332,7 @@ export function useWorkspace() {
       const meeting = await api<Meeting>(`/api/meetings/${id}`)
       if (selected.value?.id !== id || busy.value) return
       selected.value = meeting
-      if (recorder.active.value && !recorder.capturing.value && meeting.status === 'recording') return
+      maybeAutoAnalyze()
     } catch (e) {
       error.value = extractErrorMessage(e)
     } finally {
@@ -257,11 +343,11 @@ export function useWorkspace() {
   async function initializeWorkspace() {
     await run(async () => {
       await api('/api/workspace', { method: 'POST' })
-      ready.value = true
       await loadInitialData()
       if (!config.value.asr && !config.value.ai) {
         view.value = 'settings'
       }
+      ready.value = true
     })
   }
 
@@ -270,7 +356,10 @@ export function useWorkspace() {
     poll = setInterval(() => void tick(), 1500)
   })
 
-  onBeforeUnmount(() => clearInterval(poll))
+  onBeforeUnmount(() => {
+    clearInterval(poll)
+    analyzeController?.abort()
+  })
 
   return {
     ready,
@@ -283,6 +372,7 @@ export function useWorkspace() {
     devices,
     config,
     analyzing,
+    analyzingMode,
     streaming,
     follow,
     settingsSaved,
@@ -296,6 +386,7 @@ export function useWorkspace() {
     refreshList: () => run(refreshList),
     showSettings,
     saveSettings,
+    testProviderConfig,
     openMeeting,
     startNewRecording,
     loadMicrophones,
@@ -303,7 +394,7 @@ export function useWorkspace() {
     pause,
     retryUpload,
     finish,
-    analyzeMeeting,
-    markSegment
+    toggleAutoAnalyze,
+    analyzeMeeting
   }
 }

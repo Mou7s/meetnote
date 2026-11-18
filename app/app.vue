@@ -10,6 +10,7 @@ const {
   devices,
   config,
   analyzing,
+  analyzingMode,
   streaming,
   follow,
   settingsSaved,
@@ -23,6 +24,7 @@ const {
   refreshList,
   showSettings,
   saveSettings,
+  testProviderConfig,
   openMeeting,
   startNewRecording,
   loadMicrophones,
@@ -30,8 +32,8 @@ const {
   pause,
   retryUpload,
   finish,
-  analyzeMeeting,
-  markSegment
+  toggleAutoAnalyze,
+  analyzeMeeting
 } = useWorkspace()
 
 const pageTitle = computed(() =>
@@ -120,8 +122,8 @@ const navItems = computed(() => [
         <template #header>
           <UDashboardNavbar :title="pageTitle" class="topbar">
             <template #right>
-              <UBadge color="success" variant="subtle" class="server-state">
-                <span class="server-dot" /> 云端存储已连接
+              <UBadge :color="ready ? 'success' : error ? 'error' : 'neutral'" variant="subtle" class="server-state">
+                <span class="server-dot" /> {{ ready ? '服务已连接' : error ? '连接异常' : '正在连接…' }}
               </UBadge>
             </template>
           </UDashboardNavbar>
@@ -177,6 +179,7 @@ const navItems = computed(() => [
                 :config="config"
                 :busy="busy"
                 :analyzing="analyzing"
+                :analyzing-mode="analyzingMode"
                 :streaming="streaming"
                 :active="active"
                 :capturing="capturing"
@@ -190,7 +193,7 @@ const navItems = computed(() => [
                 @pause="pause"
                 @retry="retryUpload"
                 @finish="finish"
-                @mark="markSegment"
+                @toggle-auto-analyze="toggleAutoAnalyze"
                 @analyze="analyzeMeeting"
               />
             </template>
@@ -208,6 +211,7 @@ const navItems = computed(() => [
               :config="config"
               :settings-saved="settingsSaved"
               :busy="busy"
+              :test-connection="testProviderConfig"
               @save="saveSettings"
               @skip="view = 'workspace'"
             />
